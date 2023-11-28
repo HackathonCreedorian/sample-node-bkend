@@ -62,14 +62,10 @@ module.exports = (app) => {
     });
 
     // API Group 1 - Source Object
-    generateFindParams(1, uiSearchParam, sourceObject, sourceObject, sourceProduct, prod_id_details_Map);
+    const srcObjParams = generateFindParams(1, uiSearchParam, sourceObject, null, sourceObject, sourceProduct, prod_id_details_Map);
+    console.log(srcObjParams, " : srcObjParams");
     let srcObjResp = await GENERAL.find(
-      prod_id_details_Map[sourceObject.product].auth,
-      prod_id_details_Map[sourceObject.product].domain,
-      prod_id_details_Map[sourceObject.product].apiPath,
-      sourceObject.code,
-      `q=${sourceObject.uiSearchParam}=${uiSearchParam}`,
-      `fields=${sourceObject.fields.join(',').replaceAll("?", "")}`
+      srcObjParams.auth, srcObjParams.domain, srcObjParams.apiPath, srcObjParams.object, srcObjParams.query, srcObjParams.fields
     );
     results[`${sourceProduct.name}/${sourceObject.displayNameSingle}`] = srcObjResp.data.items;
 
@@ -83,13 +79,10 @@ module.exports = (app) => {
       // });
 
       if (obj.product.toString() === sourceProduct._id.toString() && obj._id !== sourceObject._id) {
+        const srcPrdObjParams = generateFindParams(2, uiSearchParam, obj, srcObjResp.data.items[0], sourceObject, sourceProduct, prod_id_details_Map);
+        console.log(srcPrdObjParams, " : srcPrdObjParams");
         srcPrdObjApis.push(GENERAL.find(
-          prod_id_details_Map[obj.product].auth,
-          prod_id_details_Map[obj.product].domain,
-          prod_id_details_Map[obj.product].apiPath,
-          obj.code,
-          `q=${obj.linkTo}=${srcObjResp.data.items[0][obj.linkWith.split('~')[1] ? obj.linkWith.split('~')[1] : obj.linkWith.split('~')[0]]}`,
-          `fields=${obj.fields.join(',').replaceAll("?", "")}`
+          srcPrdObjParams.auth, srcPrdObjParams.domain, srcPrdObjParams.apiPath, srcPrdObjParams.object, srcPrdObjParams.query, srcPrdObjParams.fields
         ));
         // results[`${prod_id_details_Map[obj.product].name}/${obj.displayNamePlural}`] = null;
       }
@@ -112,13 +105,10 @@ module.exports = (app) => {
       // });
 
       if (obj.product.toString() !== sourceProduct._id.toString()) {
+        const othPrdObjParams = generateFindParams(2, uiSearchParam, obj, srcObjResp.data.items[0], sourceObject, sourceProduct, prod_id_details_Map);
+        console.log(othPrdObjParams, " : othPrdObjParams");
         othPrdObjApis.push(GENERAL.find(
-          prod_id_details_Map[obj.product].auth,
-          prod_id_details_Map[obj.product].domain,
-          prod_id_details_Map[obj.product].apiPath,
-          obj.code,
-          `q=${obj.linkTo}=${srcObjResp.data.items[0][obj.linkWith.split('~')[1] ? obj.linkWith.split('~')[1] : obj.linkWith.split('~')[0]]}`,
-          `fields=${obj.fields.join(',').replaceAll("?", "")}`
+          othPrdObjParams.auth, othPrdObjParams.domain, othPrdObjParams.apiPath, othPrdObjParams.object, othPrdObjParams.query, othPrdObjParams.fields
         ));
         // results[`${prod_id_details_Map[obj.product].name}/${obj.displayNamePlural}`] = null;
       }

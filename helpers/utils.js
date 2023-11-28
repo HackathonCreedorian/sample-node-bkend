@@ -34,19 +34,55 @@ async function quickSortAsync(arr, prop, order) {
   sourceProduct - product which contains the sourceObject
   prod_id_details_map - object structure designed to provide a mapping between the product id and the rest of the details
 */
-function generateFindParams(type, uiSearchParam, currentObject, sourceObject, sourceProduct, prod_id_details_Map) {
+function generateFindParams(type, uiSearchParam, currentObject, sourceEntry, sourceObject, sourceProduct, prod_id_details_Map) {
   switch(prod_id_details_Map[currentObject.product].name) {
+    case "SCM":
     case "OEC":
-      console.log("OEC", " : 27112023 - generateFindParams -> OEC");
+      switch(type) {
+        case 1:
+          return {
+            auth: prod_id_details_Map[sourceObject.product].auth,
+            domain: prod_id_details_Map[sourceObject.product].domain,
+            apiPath: prod_id_details_Map[sourceObject.product].apiPath,
+            object: sourceObject.code,
+            query: `q=${sourceObject.uiSearchParam}=${uiSearchParam}`,
+            fields: `fields=${sourceObject.fields.join(',').replaceAll("?", "")}`
+          };
+        case 2:
+        case 3:
+          return {
+            auth: prod_id_details_Map[currentObject.product].auth,
+            domain: prod_id_details_Map[currentObject.product].domain,
+            apiPath: prod_id_details_Map[currentObject.product].apiPath,
+            object: currentObject.code,
+            query: `q=${currentObject.linkTo}=${sourceEntry[currentObject.linkWith.split('~')[1] ? currentObject.linkWith.split('~')[1] : currentObject.linkWith.split('~')[0]]}`,
+            fields: `fields=${currentObject.fields.join(',').replaceAll("?", "")}`
+          };
+      }
       break;
 
     case "OSVC":
-      console.log("OSVC", " : 27112023 - generateFindParams -> OSVC");
+      switch(type) {
+        case 1:
+          return {
+            auth: prod_id_details_Map[sourceObject.product].auth,
+            domain: prod_id_details_Map[sourceObject.product].domain,
+            apiPath: prod_id_details_Map[sourceObject.product].apiPath,
+            object: sourceObject.code,
+            query: `q=${sourceObject.uiSearchParam}=${uiSearchParam}`,
+            fields: `fields=${sourceObject.fields.join(',').replaceAll("?", "")}`
+          };
+        case 2:
+          break;
+        case 3:
+          break;
+      }
       break;
 
     default:
       break;
   }
+
   return {};
 }
 
