@@ -1,13 +1,15 @@
 const { Project } = require("../models/Project");
 const { Product } = require("../models/Product");
 const { ObjectMdl } = require("../models/Object");
-const { OEC, GENERAL } = require("../helpers/apis");
-const { generateFindParams } = require("../helpers/utils");
+const { OEC, OSVC, GENERAL } = require("../helpers/apis");
+const { generateFindParams, formatResponseSearch, formatResponseDetails } = require("../helpers/utils");
 
 function selectApiGroup(objName) {
   switch (objName) {
     case "OEC":
       return OEC;
+    case "OSVC":
+      return OSVC;
     default:
       break;
   }
@@ -26,18 +28,15 @@ module.exports = (app) => {
     let fields = objectsResp.fields.map(field => field.includes("?") ? field.split("?")[0] : field);
     fields = fields.join(',');
 
-    if (!searchText)
+    if (!searchText) {
       records = await selectApiGroup(projectsResp.custEntry).list_contacts(productsResp[0].domain, productsResp[0].auth, "limit=50", `fields=${fields}`);
-    else {
+    } else {
       const qParam = `q=${objectsResp.uiSearchParam}=${searchText}`;
       records = await selectApiGroup(projectsResp.custEntry).find_contacts(productsResp[0].domain, productsResp[0].auth, qParam, "limit=50", `fields=${fields}`);
     }
 
-    res.send({
-      records: records.data.items,
-      fields: objectsResp.fields,
-      qField: objectsResp.uiSearchParam
-    });
+    const response = formatResponseSearch(records.data.items, objectsResp.fields, objectsResp.uiSearchParam, projectsResp.custEntry);
+    res.send({ ...response });
   });
 
   app.get("/api/customer/:uiSearchParam", async (req, res) => {
@@ -45,7 +44,7 @@ module.exports = (app) => {
       return res.status(400).send({ error: "Missing one or all of the required attributes in query - project" });
 
     const { uiSearchParam } = req.params, { project } = req.query;
-    let results = {}, sourceProduct = null, sourceObject = null, prod_id_details_Map = {};
+    let results = {}, sourceProduct = null, sourceObject = null, prod_id_details_Map = {}, sourceEntry;
 
     let [proj, prods, objs] = await Promise.all([
       Project.findById(project), Product.find({ project }), ObjectMdl.find({ project })
@@ -63,11 +62,11 @@ module.exports = (app) => {
 
     // API Group 1 - Source Object
     const srcObjParams = generateFindParams(1, uiSearchParam, sourceObject, null, sourceObject, sourceProduct, prod_id_details_Map);
-    console.log(srcObjParams, " : srcObjParams");
     let srcObjResp = await GENERAL.find(
-      srcObjParams.auth, srcObjParams.domain, srcObjParams.apiPath, srcObjParams.object, srcObjParams.query, srcObjParams.fields
+      srcObjParams.auth, srcObjParams.domain, srcObjParams.apiPath, srcObjParams.object, srcObjParams.query, srcObjParams.fields, srcObjParams.headers
     );
-    results[`${sourceProduct.name}/${sourceObject.displayNameSingle}`] = srcObjResp.data.items;
+    sourceEntry = formatResponseDetails(sourceProduct, srcObjResp, sourceObject.fields);
+    results[`${sourceProduct.name}/${sourceObject.displayNamePlural}`] = sourceEntry;
 
     // API Group 2 - Source Product Objects
     let srcPrdObjApis = [], count = 0;
@@ -79,10 +78,10 @@ module.exports = (app) => {
       // });
 
       if (obj.product.toString() === sourceProduct._id.toString() && obj._id !== sourceObject._id) {
-        const srcPrdObjParams = generateFindParams(2, uiSearchParam, obj, srcObjResp.data.items[0], sourceObject, sourceProduct, prod_id_details_Map);
+        const srcPrdObjParams = generateFindParams(2, uiSearchParam, obj, sourceEntry, sourceObject, sourceProduct, prod_id_details_Map);
         console.log(srcPrdObjParams, " : srcPrdObjParams");
         srcPrdObjApis.push(GENERAL.find(
-          srcPrdObjParams.auth, srcPrdObjParams.domain, srcPrdObjParams.apiPath, srcPrdObjParams.object, srcPrdObjParams.query, srcPrdObjParams.fields
+          srcPrdObjParams.auth, srcPrdObjParams.domain, srcPrdObjParams.apiPath, srcPrdObjParams.object, srcPrdObjParams.query, srcPrdObjParams.fields, srcPrdObjParams.headers
         ));
         // results[`${prod_id_details_Map[obj.product].name}/${obj.displayNamePlural}`] = null;
       }
@@ -90,7 +89,8 @@ module.exports = (app) => {
     const srcPrdObjResults = await Promise.all(srcPrdObjApis);
     objs.forEach((obj) => {
       if (obj.product.toString() === sourceProduct._id.toString() && obj._id !== sourceObject._id) {
-        results[`${prod_id_details_Map[obj.product].name}/${obj.displayNamePlural}`] = srcPrdObjResults[count++].data.items;
+        // results[`${prod_id_details_Map[obj.product].name}/${obj.displayNamePlural}`] = srcPrdObjResults[count++].data.items;
+        results[`${prod_id_details_Map[obj.product].name}/${obj.displayNamePlural}`] = formatResponseDetails(sourceProduct, srcPrdObjResults[count++], obj.fields);
       }
     });
 
@@ -105,10 +105,10 @@ module.exports = (app) => {
       // });
 
       if (obj.product.toString() !== sourceProduct._id.toString()) {
-        const othPrdObjParams = generateFindParams(2, uiSearchParam, obj, srcObjResp.data.items[0], sourceObject, sourceProduct, prod_id_details_Map);
+        const othPrdObjParams = generateFindParams(2, uiSearchParam, obj, sourceEntry, sourceObject, sourceProduct, prod_id_details_Map);
         console.log(othPrdObjParams, " : othPrdObjParams");
         othPrdObjApis.push(GENERAL.find(
-          othPrdObjParams.auth, othPrdObjParams.domain, othPrdObjParams.apiPath, othPrdObjParams.object, othPrdObjParams.query, othPrdObjParams.fields
+          othPrdObjParams.auth, othPrdObjParams.domain, othPrdObjParams.apiPath, othPrdObjParams.object, othPrdObjParams.query, othPrdObjParams.fields, othPrdObjParams.headers
         ));
         // results[`${prod_id_details_Map[obj.product].name}/${obj.displayNamePlural}`] = null;
       }
@@ -121,8 +121,9 @@ module.exports = (app) => {
     });
 
     res.send({ 
-      sourceObject, 
-      sourceProduct, 
+      srcObject: sourceObject, 
+      srcProduct: sourceProduct, 
+      srcEntry: sourceEntry,
       results
     });
   });
